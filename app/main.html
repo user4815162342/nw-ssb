@@ -1,0 +1,442 @@
+<html>
+<head>
+<title>Hidden main window</title>
+<script>
+    var gui = require('nw.gui');
+</script>
+<script>
+    // Some functionality to fix the window.
+    
+    
+    // The window 'close' event causes a problem when you have multiple
+    // components which want to handle the closing, since it allows any
+    // one of them to force the window to close, even if another wanted
+    // to prevent closing.
+    // This workaround creates a 'closing' event instead, which allows
+    // a single listener to prevent the window from closing if it doesn't
+    // want to (by calling 'prevent' method on the passed argument. 
+    // Unfortunately, I can't enforce things to use it, so if something
+    // weird happens, that's not my fault.
+    var addClosingEvent = function(win) {
+        win.on('close',function() {
+            var closePrevented = false;
+            var closingArg = {
+                prevent: function() {
+                    closePrevented = true;
+                }
+            }
+            win.emit('closing',closingArg);
+            if (!closePrevented) {
+                win.close(true);
+            }
+        });
+        return win;
+    }
+    
+</script>
+<script>
+// From https://github.com/rogerwang/node-webkit/wiki/Preserve-window-state-between-sessions
+'use strict'
+/**
+ * Cross-platform window state preservation.
+ * Yes this code is quite complicated, but this is the best I came up with for
+ * current state of node-webkit Window API (v0.7.3 and later).
+ *
+ * Known issues:
+ * - unmaximization not always sets the window (x, y) in the lastly used coordinates
+ * - unmaximization animation sometimes looks wierd
+ * - extra height added to window, at least in linux x64 gnome-shell env. It seems that
+ *   when we read height then it returns it with window frame, but if we resize window
+ *   then it applies dimensions only to internal document without external frame.
+ *   Need to test in other environments with different visual themes.
+ *
+ * Change log:
+ * 2013.12.01
+ * - workaround of extra height in gnome-shell added
+ * 2014.01.01 (NMS)
+ * - remove the 'close' event, since this conflicts with close-to-tray functionality.
+ *   replace with a 'closing' event listener
+ * - modified to return an object which can be applied to any window, instead
+ *   of just the global window.
+ * - removed the deltaHeight code, as it seems to cause the window
+ *   to gradually shrink (by much more than the frame heights), and I 
+ *   don't see the problem it is fixing either (running linux 64 xfce).
+ *   My issue may be related to the window not being shown until after
+ *   the state is restored.
+ */
+
+function persistWindowState(win) {
+    //var gui = require('nw.gui');
+    //var win = gui.Window.get();
+    var winState;
+    var currWinMode;
+    var resizeTimeout;
+    var isMaximizationEvent = false;
+
+    // extra height added in linux x64 gnome-shell env, use it as workaround
+    //var deltaHeight = false;
+
+
+    function initWindowState() {
+        winState = JSON.parse(localStorage.windowState || 'null');
+
+        if (winState) {
+            currWinMode = winState.mode;
+            if (currWinMode === 'maximized') {
+                win.maximize();
+            } else {
+                restoreWindowState();
+            }
+        } else {
+            currWinMode = 'normal';
+            //deltaHeight = 0
+            dumpWindowState();
+        }
+
+        // NMS: Removed this because sometimes I don't want to show it.
+        // win.show();
+    }
+
+    function dumpWindowState() {
+        if (!winState) {
+            winState = {};
+        }
+
+        // we don't want to save minimized state, only maximized or normal
+        if (currWinMode === 'maximized') {
+            winState.mode = 'maximized';
+        } else {
+            winState.mode = 'normal';
+        }
+
+        // when window is maximized you want to preserve normal
+        // window dimensions to restore them later (even between sessions)
+        if (currWinMode === 'normal') {
+            winState.x = win.x;
+            winState.y = win.y;
+            winState.width = win.width;
+            winState.height = win.height;
+
+            // save delta only of it is not zero
+            /*if (deltaHeight !== 0) {
+                winState.deltaHeight = deltaHeight;
+            }*/
+        }
+    }
+
+    function restoreWindowState() {
+        // deltaHeight already saved, so just restore it and adjust window height
+        /*if (typeof winState.deltaHeight !== 'undefined') {
+            deltaHeight = winState.deltaHeight
+            winState.height = winState.height - deltaHeight
+        }*/
+
+        win.resizeTo(winState.width, winState.height);
+        win.moveTo(winState.x, winState.y);
+    }
+
+    function saveWindowState() {
+        dumpWindowState();
+        localStorage.windowState = JSON.stringify(winState);
+    }
+
+    initWindowState();
+
+    win.on('maximize', function () {
+        isMaximizationEvent = true;
+        currWinMode = 'maximized';
+    });
+
+    win.on('unmaximize', function () {
+        currWinMode = 'normal';
+        restoreWindowState();
+    });
+
+    win.on('minimize', function () {
+        currWinMode = 'minimized';
+    });
+
+    win.on('restore', function () {
+        currWinMode = 'normal';
+    });
+
+    win.window.addEventListener('resize', function () {
+        // resize event is fired many times on one resize action,
+        // this hack with setTiemout forces it to fire only once
+        clearTimeout(resizeTimeout);
+        resizeTimeout = setTimeout(function () {
+
+            // on MacOS you can resize maximized window, so it's no longer maximized
+            if (isMaximizationEvent) {
+                // first resize after maximization event should be ignored
+                isMaximizationEvent = false;
+            } else {
+                if (currWinMode === 'maximized') {
+                    currWinMode = 'normal';
+                }
+            }
+
+            // there is no deltaHeight yet, calculate it and adjust window size
+            /*if (deltaHeight === false) {
+                deltaHeight = win.height - winState.height;
+
+                // set correct size
+                if (deltaHeight !== 0) {
+                    win.resizeTo(winState.width, win.height - deltaHeight);
+                }
+            }*/
+
+            dumpWindowState();
+
+        }, 500);
+    }, false);
+
+    
+    //NMS: Removed this because it messes with our close-to-tray system. Anyway, I need to call saveWindowState whenever I'm hiding.
+    win.on('closing', function () {
+        saveWindowState();
+        //this.close(true);
+    });
+    
+    return {
+        dump: dumpWindowState,
+        save: saveWindowState,
+        restore: restoreWindowState
+        
+    }
+    
+}
+</script>
+<script>
+</script>
+<script>
+
+var appWin = null;
+// NOTE: At least with nw 0.8.3, these need to be declared in this scope,
+// or things get weird. Don't declare them in the scope of the functions
+// that create them. I'm assuming this has something to do with
+// garbage collection removing them when they're still in use by the OS.
+var appTray = null;
+var appMenu = null;
+var exiting = false;
+var errorMessage = "No error occurred. But, this shouldn't display.";
+
+var loadAppFile = function() {
+    var appFile = gui.App.argv[0];
+    if (appFile) {
+        var fs = require('fs');
+        try {
+            return JSON.parse(fs.readFileSync(appFile,'utf8'));
+        } catch (e) {
+            throw "App Spec File could not be read or parsed. Note that the full path of the file is required.<br/>" + e;
+            
+        }
+    } else {
+        throw "Nw-ssb requires an application spec file as a command line argument. None was passed."
+    }
+}
+
+var setupTrayIcon = function(win,icon,startDown) {
+   var up = startDown !== true;
+   var trayShowMenu;
+
+   var lowered = function() {
+       up = false;
+       trayShowMenu.checked = false;
+   }
+   
+   var raised = function() {
+       up = true;
+       trayShowMenu.checked = true;
+   }
+
+
+   var toggle = function() {
+       if (up) {
+          win.minimize();
+          lowered();
+       } else {
+           // in case we overrode the minimize to also hide the window.
+          win.show();
+          win.restore();
+          raised();
+       }
+   }
+   
+   
+   appTray = new gui.Tray({ title: "Tasks", icon: icon || gui.App.manifest.window.icon});
+   appTray.on('click',toggle);
+   win.on('minimize',lowered);
+   win.on('restore',raised);
+   var trayMenu = new gui.Menu();
+   trayShowMenu = new gui.MenuItem({
+       type: "checkbox",
+       label: "Show",
+       click: toggle,
+       checked: up
+   });
+   trayMenu.append(trayShowMenu);
+   trayMenu.append(new gui.MenuItem({
+       label: "Exit",
+       click: exitApp
+   }));
+   appTray.menu = trayMenu;
+   
+   up ? raised() : lowered();
+
+}
+
+var showAbout = function() {
+   alert("This is a site-specific browser running with nw-ssb.\n Nw-ssb lets you run a web site as a desktop app.");
+}
+
+
+var setupMenu = function(win) {
+  appMenu = new gui.Menu({ type: 'menubar' });
+  var fileMenu = new gui.Menu();
+  fileMenu.append(new gui.MenuItem({
+    label: "Exit",
+    click: exitApp
+  }));
+  appMenu.append(new gui.MenuItem({
+    label: "File",
+    submenu: fileMenu
+  }));
+  var helpMenu = new gui.Menu();
+  helpMenu.append(new gui.MenuItem({
+    label: "About",
+    click: showAbout
+  }));
+  appMenu.append(new gui.MenuItem({
+    label: "Help",
+    submenu: helpMenu
+  }));
+  win.menu = appMenu;
+}
+
+var exitApp = function() {
+    exiting = true;
+    // show the app first, in case we started it hiding and it never
+    // had a chance to render. This will also allow it to prompt for
+    // closing if necessary.
+    appWin.show();
+    appWin.restore();
+    appWin.close();
+}
+
+var openApp = function(appSpec) {
+
+    // fix some defaults in the specs
+    
+    // if use-tray-icon isn't turned on, then we can not 
+    // minimize to tray, nor start hidden.
+    if (appSpec["use-tray-icon"] !== true) {
+        appSpec["minimize-to-tray"] = false;
+        appSpec["start-hidden"] = false;
+    }
+    
+    // if minimize to tray is on, and start-hidden isn't explicitly
+    // set to false, then start-hidden is true. Otherwise, start-hidden
+    // must be false if minimize-to-tray isn't on.
+    if (appSpec["minimize-to-tray"] === true) {
+        if (appSpec["start-hidden"] !== false) {
+            appSpec["start-hidden"] = true;
+        }
+    } else {
+        appSpec["start-hidden"] = false;
+    }
+        
+    // if minimize-on-close is true or kiosk mode is on, then
+    // we can't get rid of the menu bar.
+    if ((appSpec["minimize-on-close"] && (!appSpec["use-tray-icon"])) || appSpec["kiosk"]) {
+        appSpec["menu-bar"] = true;
+    }
+
+    var options = {
+        title: appSpec.title || "nw-ssb",
+        toolbar: appSpec.toolbar === true || false,
+        show: false
+    }
+    // copy the following options only if defined, otherwise use nw defaults
+    // TODO: In the future, test these, especially when combined with persist-window-appearance
+    Array(["icon","width","height","x","y","icon","position","min_width","max_width","min_height","max_height","as_desktop","resizable","always-on-top","fullscreen","frame","kiosk"]).forEach(function(key) {
+        if (appSpec.hasOwnProperty(key)) {
+            options[key] = appSpec[key];
+        }
+    });
+    // TODO: Have to figure out why icon isn't being used.
+    appWin = gui.Window.open(appSpec.url,options);
+    addClosingEvent(appWin);
+    
+    var initWindow = function() {
+        // prevent init from running more than once.
+        appWin.removeListener('loaded',initWindow);
+        
+        // persist window state if necessary.
+        if (appSpec["persist-window-appearance"] === true) {
+            persistWindowState(appWin);
+        }
+        
+        if (appSpec["use-tray-icon"]) {
+            setupTrayIcon(appWin,appSpec.icon,appSpec["start-hidden"])
+            
+            if (appSpec["minimize-to-tray"]) {
+                appWin.on('minimize',function() {
+                    appWin.hide();
+                });
+            }
+        }
+
+        if (appSpec["menu-bar"] !== false) {
+            setupMenu(appWin);
+        }
+        
+        // show it if it's not supposed to start hidden
+        // this should have been checked for validity of other specs earlier.
+        if ((appSpec["start-hidden"] !== true)) {
+            appWin.show();
+        }
+        
+    }
+    
+    // run deferred loading specifications.
+    appWin.on('loaded',initWindow);
+    
+        
+    if (appSpec["minimize-on-close"]) {
+        appWin.on('closing',function(arg) {
+            // prevent closing unless we're specifically exiting.
+            if (!exiting) {
+                arg.prevent();
+            }
+            appWin.minimize();
+        })
+    }
+    
+        
+    
+    // Normal closing behavior
+    appWin.on('closed',function() {
+        gui.App.closeAllWindows();
+    });
+    return appWin;
+}
+
+
+try {
+    var app = loadAppFile();
+    appWin = openApp(app);
+} catch (e) {
+    errorMessage = e;
+    gui.Window.get().show();
+}
+
+</script>
+</head>
+<body>
+    <h1>nw-ssb</h1>
+    <p>If you are seeing this, than an error occurred trying to start
+    up your site-specific browser. The error message was:</p>
+    <p><b><script>document.write(errorMessage);</script></b></p>
+</body>
+</html>

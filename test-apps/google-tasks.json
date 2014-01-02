@@ -1,0 +1,18 @@
+{
+    "url": "https://mail.google.com/tasks/canvas",
+    "__comments": [
+			"Other possible addresses, yes, as of 2014-01 these all work despite iGoogle being gone:", 
+			"'canvas' version: https://mail.google.com/tasks/canvas",
+			"mobile version: https://mail.google.com/tasks/m", 
+			"android version: https://mail.google.com/tasks/android", 
+			"iphone version: https://mail.google.com/tasks/iphone", 
+			"igoogle gadget: https://mail.google.com/tasks/ig"
+		],
+    "title": "Google Tasks",
+    "icon": "/usr/share/icons/Mint-X/apps/32/evolution-tasks.png",
+    "use-tray-icon": true,
+    "minimize-to-tray": true,
+    "minimize-on-close": true,
+    "persist-window-appearance": true,
+    "menu-bar": false
+}
