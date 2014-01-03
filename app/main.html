@@ -3,213 +3,20 @@
 <title>Hidden main window</title>
 <script>
     var gui = require('nw.gui');
-</script>
-<script>
-    // Some functionality to fix the window.
-    
-    
-    // The window 'close' event causes a problem when you have multiple
-    // components which want to handle the closing, since it allows any
-    // one of them to force the window to close, even if another wanted
-    // to prevent closing.
-    // This workaround creates a 'closing' event instead, which allows
-    // a single listener to prevent the window from closing if it doesn't
-    // want to (by calling 'prevent' method on the passed argument. 
-    // Unfortunately, I can't enforce things to use it, so if something
-    // weird happens, that's not my fault.
-    var addClosingEvent = function(win) {
-        win.on('close',function() {
-            var closePrevented = false;
-            var closingArg = {
-                prevent: function() {
-                    closePrevented = true;
-                }
-            }
-            win.emit('closing',closingArg);
-            if (!closePrevented) {
-                win.close(true);
-            }
-        });
-        return win;
-    }
+    var helper = require('./window-helper');
+    // TODO: windowHelper should automatically use load event for those 
+    // things that done after loading.
+    // TODO: Should be able to pass options to the windowHelper to
+    // call the features automatically. This should simplify our code
+    // here a bit.
+    // TODO: Simplify our code further here. I'd like to get it to
+    // a point where there are only a few very short functions that
+    // I'm just wiring together.
     
 </script>
 <script>
-// From https://github.com/rogerwang/node-webkit/wiki/Preserve-window-state-between-sessions
+    
 'use strict'
-/**
- * Cross-platform window state preservation.
- * Yes this code is quite complicated, but this is the best I came up with for
- * current state of node-webkit Window API (v0.7.3 and later).
- *
- * Known issues:
- * - unmaximization not always sets the window (x, y) in the lastly used coordinates
- * - unmaximization animation sometimes looks wierd
- * - extra height added to window, at least in linux x64 gnome-shell env. It seems that
- *   when we read height then it returns it with window frame, but if we resize window
- *   then it applies dimensions only to internal document without external frame.
- *   Need to test in other environments with different visual themes.
- *
- * Change log:
- * 2013.12.01
- * - workaround of extra height in gnome-shell added
- * 2014.01.01 (NMS)
- * - remove the 'close' event, since this conflicts with close-to-tray functionality.
- *   replace with a 'closing' event listener
- * - modified to return an object which can be applied to any window, instead
- *   of just the global window.
- * - removed the deltaHeight code, as it seems to cause the window
- *   to gradually shrink (by much more than the frame heights), and I 
- *   don't see the problem it is fixing either (running linux 64 xfce).
- *   My issue may be related to the window not being shown until after
- *   the state is restored.
- */
-
-function persistWindowState(win) {
-    //var gui = require('nw.gui');
-    //var win = gui.Window.get();
-    var winState;
-    var currWinMode;
-    var resizeTimeout;
-    var isMaximizationEvent = false;
-
-    // extra height added in linux x64 gnome-shell env, use it as workaround
-    //var deltaHeight = false;
-
-
-    function initWindowState() {
-        winState = JSON.parse(localStorage.windowState || 'null');
-
-        if (winState) {
-            currWinMode = winState.mode;
-            if (currWinMode === 'maximized') {
-                win.maximize();
-            } else {
-                restoreWindowState();
-            }
-        } else {
-            currWinMode = 'normal';
-            //deltaHeight = 0
-            dumpWindowState();
-        }
-
-        // NMS: Removed this because sometimes I don't want to show it.
-        // win.show();
-    }
-
-    function dumpWindowState() {
-        if (!winState) {
-            winState = {};
-        }
-
-        // we don't want to save minimized state, only maximized or normal
-        if (currWinMode === 'maximized') {
-            winState.mode = 'maximized';
-        } else {
-            winState.mode = 'normal';
-        }
-
-        // when window is maximized you want to preserve normal
-        // window dimensions to restore them later (even between sessions)
-        if (currWinMode === 'normal') {
-            winState.x = win.x;
-            winState.y = win.y;
-            winState.width = win.width;
-            winState.height = win.height;
-
-            // save delta only of it is not zero
-            /*if (deltaHeight !== 0) {
-                winState.deltaHeight = deltaHeight;
-            }*/
-        }
-    }
-
-    function restoreWindowState() {
-        // deltaHeight already saved, so just restore it and adjust window height
-        /*if (typeof winState.deltaHeight !== 'undefined') {
-            deltaHeight = winState.deltaHeight
-            winState.height = winState.height - deltaHeight
-        }*/
-
-        win.resizeTo(winState.width, winState.height);
-        win.moveTo(winState.x, winState.y);
-    }
-
-    function saveWindowState() {
-        dumpWindowState();
-        localStorage.windowState = JSON.stringify(winState);
-    }
-
-    initWindowState();
-
-    win.on('maximize', function () {
-        isMaximizationEvent = true;
-        currWinMode = 'maximized';
-    });
-
-    win.on('unmaximize', function () {
-        currWinMode = 'normal';
-        restoreWindowState();
-    });
-
-    win.on('minimize', function () {
-        currWinMode = 'minimized';
-    });
-
-    win.on('restore', function () {
-        currWinMode = 'normal';
-    });
-
-    win.window.addEventListener('resize', function () {
-        // resize event is fired many times on one resize action,
-        // this hack with setTiemout forces it to fire only once
-        clearTimeout(resizeTimeout);
-        resizeTimeout = setTimeout(function () {
-
-            // on MacOS you can resize maximized window, so it's no longer maximized
-            if (isMaximizationEvent) {
-                // first resize after maximization event should be ignored
-                isMaximizationEvent = false;
-            } else {
-                if (currWinMode === 'maximized') {
-                    currWinMode = 'normal';
-                }
-            }
-
-            // there is no deltaHeight yet, calculate it and adjust window size
-            /*if (deltaHeight === false) {
-                deltaHeight = win.height - winState.height;
-
-                // set correct size
-                if (deltaHeight !== 0) {
-                    win.resizeTo(winState.width, win.height - deltaHeight);
-                }
-            }*/
-
-            dumpWindowState();
-
-        }, 500);
-    }, false);
-
-    
-    //NMS: Removed this because it messes with our close-to-tray system. Anyway, I need to call saveWindowState whenever I'm hiding.
-    win.on('closing', function () {
-        saveWindowState();
-        //this.close(true);
-    });
-    
-    return {
-        dump: dumpWindowState,
-        save: saveWindowState,
-        restore: restoreWindowState
-        
-    }
-    
-}
-</script>
-<script>
-</script>
-<script>
 
 var appWin = null;
 // NOTE: At least with nw 0.8.3, these need to be declared in this scope,
@@ -236,54 +43,22 @@ var loadAppFile = function() {
     }
 }
 
-var setupTrayIcon = function(win,icon,startDown) {
-   var up = startDown !== true;
-   var trayShowMenu;
-
-   var lowered = function() {
-       up = false;
-       trayShowMenu.checked = false;
-   }
-   
-   var raised = function() {
-       up = true;
-       trayShowMenu.checked = true;
-   }
-
-
-   var toggle = function() {
-       if (up) {
-          win.minimize();
-          lowered();
-       } else {
-           // in case we overrode the minimize to also hide the window.
-          win.show();
-          win.restore();
-          raised();
-       }
-   }
-   
-   
-   appTray = new gui.Tray({ title: "Tasks", icon: icon || gui.App.manifest.window.icon});
-   appTray.on('click',toggle);
-   win.on('minimize',lowered);
-   win.on('restore',raised);
-   var trayMenu = new gui.Menu();
-   trayShowMenu = new gui.MenuItem({
+var setupTrayIcon = function(win,appSpec,visible) {
+    appTray = new gui.Tray({ title: appSpec.title, icon: appSpec.icon || gui.App.manifest.window.icon } );
+    var trayMenu = new gui.Menu();
+    var trayShowMenu = new gui.MenuItem({
        type: "checkbox",
-       label: "Show",
-       click: toggle,
-       checked: up
-   });
-   trayMenu.append(trayShowMenu);
-   trayMenu.append(new gui.MenuItem({
+       label: "Show"
+    });
+    trayMenu.append(trayShowMenu);
+    trayMenu.append(new gui.MenuItem({
        label: "Exit",
        click: exitApp
-   }));
-   appTray.menu = trayMenu;
-   
-   up ? raised() : lowered();
+    }));
+    appTray.menu = trayMenu;
+    win.attachTrayIcon(appTray,trayShowMenu,visible);
 
+    return;    
 }
 
 var showAbout = function() {
@@ -315,13 +90,12 @@ var setupMenu = function(win) {
 }
 
 var exitApp = function() {
-    exiting = true;
     // show the app first, in case we started it hiding and it never
     // had a chance to render. This will also allow it to prompt for
     // closing if necessary.
     appWin.show();
     appWin.restore();
-    appWin.close();
+    appWin.closeWithoutMinimizing();
 }
 
 var openApp = function(appSpec) {
@@ -365,8 +139,8 @@ var openApp = function(appSpec) {
         }
     });
     // TODO: Have to figure out why icon isn't being used.
-    appWin = gui.Window.open(appSpec.url,options);
-    addClosingEvent(appWin);
+    appWin = helper(gui.Window.open(appSpec.url,options));
+    appWin.addClosingEvent();
     
     var initWindow = function() {
         // prevent init from running more than once.
@@ -374,16 +148,19 @@ var openApp = function(appSpec) {
         
         // persist window state if necessary.
         if (appSpec["persist-window-appearance"] === true) {
-            persistWindowState(appWin);
+            appWin.persistLayout(function() {
+                return JSON.parse(localStorage.windowState || 'null');        
+            },function(data) {
+                localStorage.windowState = JSON.stringify(data);
+            });
         }
         
         if (appSpec["use-tray-icon"]) {
-            setupTrayIcon(appWin,appSpec.icon,appSpec["start-hidden"])
+            
+            setupTrayIcon(appWin,appSpec,!appSpec["start-hidden"])
             
             if (appSpec["minimize-to-tray"]) {
-                appWin.on('minimize',function() {
-                    appWin.hide();
-                });
+                appWin.hideOnMinimize();
             }
         }
 
@@ -404,16 +181,8 @@ var openApp = function(appSpec) {
     
         
     if (appSpec["minimize-on-close"]) {
-        appWin.on('closing',function(arg) {
-            // prevent closing unless we're specifically exiting.
-            if (!exiting) {
-                arg.prevent();
-            }
-            appWin.minimize();
-        })
+        appWin.minimizeOnClose();
     }
-    
-        
     
     // Normal closing behavior
     appWin.on('closed',function() {

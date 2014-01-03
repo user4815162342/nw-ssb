@@ -1,5 +1,5 @@
 {
-    "url": "https://mail.google.com/tasks/canvas",
+    "url": "http://townsedgetechnology.com",
     "__comments": [
 			"Other possible addresses, yes, as of 2014-01 these all work despite iGoogle being gone:", 
 			"'canvas' version: https://mail.google.com/tasks/canvas",
@@ -13,6 +13,5 @@
     "use-tray-icon": true,
     "minimize-to-tray": true,
     "minimize-on-close": true,
-    "persist-window-appearance": true,
-    "menu-bar": false
+    "persist-window-appearance": true
 }
