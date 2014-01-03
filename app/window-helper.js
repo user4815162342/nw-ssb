@@ -201,9 +201,9 @@ module.exports = function(win) {
                         currWinMode = 'normal';
                     });
                     
-                    // make use of the new resize event.
-                    // TODO: I think there's a new 'move' event as well?
-                    win.on('resize',function() {
+                    // moved into a separate function since I need the
+                    // same code for the move event.
+                    var handleResize = function() {
                             // resize event is fired many times on one resize action,
                             // this hack with setTiemout forces it to fire only once
                             clearTimeout(resizeTimeout);
@@ -238,7 +238,11 @@ module.exports = function(win) {
                                 dumpWindowState();
 
                             }, 500)
-                    });
+                    }
+                    
+                    // make use of the new resize event.
+                    win.on('resize',handleResize);
+                    win.on('move',handleResize);
                     
 
                     
