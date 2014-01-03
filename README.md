@@ -7,6 +7,9 @@ run the file with this application.
 
 ## Building
 
+Note that the app can be run without building if you have a copy of
+node-webkit.
+
 Install grunt
    sudo npm install -g grunt-cli
 

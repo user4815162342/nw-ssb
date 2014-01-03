@@ -23,7 +23,8 @@ var errorMessage = "No error occurred. But, this shouldn't display.";
 // TODO: At some point we should resolve this based on a current directory.
 // Do it here, since this same path is used as a key for local storage.
 var appFile = gui.App.argv[0];
-var appSettingsKey = appFile;
+// the settings key is the app file path if specified, otherwise it's 'ssbapp'
+var appSettingsKey = appFile || "ssbapp";
 
 var loadAppFile = function() {
     if (appFile) {
@@ -34,6 +35,9 @@ var loadAppFile = function() {
             throw "App Spec File could not be read or parsed. Note that the full path of the file is required.<br/>" + e;
             
         }
+        // else look for a built-in manifest.
+    } else if (gui.App.manifest.ssbapp) {
+        return gui.App.manifest.ssbapp;
     } else {
         throw "Nw-ssb requires an application spec file as a command line argument. None was passed."
     }

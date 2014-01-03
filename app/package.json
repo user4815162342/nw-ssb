@@ -2,7 +2,7 @@
   "name": "nw-ssb",
   "main": "main.html",
   "description": "Run remote web applications as desktop applications",
-  "single-instance": true,
+  "single-instance": false,
   "version": "0.0.1",
   "window": {
      "title": "Node-webkit Site Specific Browser",

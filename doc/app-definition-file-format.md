@@ -5,6 +5,10 @@ The file which defines an application to run is a JSON file with similar
 properties to the 'window' object in a node-webkit manifest, with a
 few additional properties.
 
+Note that you can also embed the app definitions in a custom-built version
+of nw-ssb, by putting it in an ssbapp key in the manifest. See the
+loadAppFile function in main.html for more details.
+
 See the files in test-apps for some examples.
 
 ## Properties:
