@@ -49,6 +49,10 @@ module.exports = function(win) {
          * save should take the passed object and store it somewhere. 
          * The data will be JSON serializable.
          * 
+         * The ready function is called once the persistence has been
+         * set up. The caller can use this to show the form if it is
+         * ready.
+         * 
          * To avoid unwanted results, the window should be created as
          * hidden, and should be shown *after* this function is called
          * and has a chance to apply data to the window.
@@ -56,7 +60,7 @@ module.exports = function(win) {
          * This should also be called after the loaded event has occurred
          * on the window, or it won't work properly.
          * */        
-        win.persistLayout = function(load,store) {
+        win.persistLayout = function(load,store,ready) {
                 // From https://github.com/rogerwang/node-webkit/wiki/Preserve-window-state-between-sessions
                 /**
                  * Cross-platform window state preservation.
@@ -85,6 +89,7 @@ module.exports = function(win) {
                  *   My issue may be related to the window not being shown until after
                  *   the state is restored. And, it looks like this issue is supposedly
                  *   fixed? https://github.com/rogerwang/node-webkit/issues/173
+                 * - automatically run the code that only works after loading in a loaded event.
                  */
             
             if (typeof win.__layoutPersisted === "undefined") {
@@ -183,37 +188,47 @@ module.exports = function(win) {
                     win.on('restore', function () {
                         currWinMode = 'normal';
                     });
+                    
+                    // This one can't be added until after loaded, since
+                    // it depends on having the inner window object.
+                    win.once('loaded',function() {
+                        win.window.addEventListener('resize', function () {
+                            // resize event is fired many times on one resize action,
+                            // this hack with setTiemout forces it to fire only once
+                            clearTimeout(resizeTimeout);
+                            resizeTimeout = setTimeout(function () {
 
-                    win.window.addEventListener('resize', function () {
-                        // resize event is fired many times on one resize action,
-                        // this hack with setTiemout forces it to fire only once
-                        clearTimeout(resizeTimeout);
-                        resizeTimeout = setTimeout(function () {
-
-                            // on MacOS you can resize maximized window, so it's no longer maximized
-                            if (isMaximizationEvent) {
-                                // first resize after maximization event should be ignored
-                                isMaximizationEvent = false;
-                            } else {
-                                if (currWinMode === 'maximized') {
-                                    currWinMode = 'normal';
+                                // on MacOS you can resize maximized window, so it's no longer maximized
+                                if (isMaximizationEvent) {
+                                    // first resize after maximization event should be ignored
+                                    isMaximizationEvent = false;
+                                } else {
+                                    if (currWinMode === 'maximized') {
+                                        currWinMode = 'normal';
+                                    }
                                 }
-                            }
 
-                            // there is no deltaHeight yet, calculate it and adjust window size
-                            /*if (deltaHeight === false) {
-                                deltaHeight = win.height - winState.height;
+                                // there is no deltaHeight yet, calculate it and adjust window size
+                                /*if (deltaHeight === false) {
+                                    deltaHeight = win.height - winState.height;
 
-                                // set correct size
-                                if (deltaHeight !== 0) {
-                                    win.resizeTo(winState.width, win.height - deltaHeight);
-                                }
-                            }*/
+                                    // set correct size
+                                    if (deltaHeight !== 0) {
+                                        win.resizeTo(winState.width, win.height - deltaHeight);
+                                    }
+                                }*/
 
-                            dumpWindowState();
+                                dumpWindowState();
 
-                        }, 500);
-                    }, false);
+                            }, 500);
+                        }, false);
+                        
+                        // Everything is set up, so now...
+                        if (ready) {
+                            ready();
+                        }
+                    });
+                    
 
                     
                     //NMS: Removed this because it messes with our close-to-tray system. Anyway, I need to call saveWindowState whenever I'm hiding.

@@ -4,8 +4,18 @@
 <script>
     var gui = require('nw.gui');
     var helper = require('./window-helper');
-    // TODO: windowHelper should automatically use load event for those 
-    // things that done after loading.
+    // TODO: There is now a 'resize' event on the nw Window, not just
+    // the inner window. Maybe if I make use of that I won't have
+    // the weird height changing stuff. Also a 'move' event that
+    // we should probably watch for.
+    // TODO: Okay, why is deltaHeight messing with things in this one,
+    // but not in the other one I did?
+    // TODO: May have to add the 'deltaHeight' back in, it's expanding,
+    // just a lot more slowly. Not to mention that my tests were done
+    // using the wrong version of nw. I do wonder if it has something 
+    // to do with the menu? Or, based on the fact that with deltaHeight
+    // it's reducing, maybe it's doing the wrong arithmetic. Need to
+    // get an eye on what it's doing there.
     // TODO: Should be able to pass options to the windowHelper to
     // call the features automatically. This should simplify our code
     // here a bit.
@@ -142,52 +152,47 @@ var openApp = function(appSpec) {
     appWin = helper(gui.Window.open(appSpec.url,options));
     appWin.addClosingEvent();
     
-    var initWindow = function() {
-        // prevent init from running more than once.
-        appWin.removeListener('loaded',initWindow);
+    if (appSpec["use-tray-icon"]) {
         
-        // persist window state if necessary.
-        if (appSpec["persist-window-appearance"] === true) {
-            appWin.persistLayout(function() {
-                return JSON.parse(localStorage.windowState || 'null');        
-            },function(data) {
-                localStorage.windowState = JSON.stringify(data);
-            });
-        }
+        setupTrayIcon(appWin,appSpec,!appSpec["start-hidden"])
         
-        if (appSpec["use-tray-icon"]) {
-            
-            setupTrayIcon(appWin,appSpec,!appSpec["start-hidden"])
-            
-            if (appSpec["minimize-to-tray"]) {
-                appWin.hideOnMinimize();
-            }
+        if (appSpec["minimize-to-tray"]) {
+            appWin.hideOnMinimize();
         }
-
-        if (appSpec["menu-bar"] !== false) {
-            setupMenu(appWin);
-        }
-        
-        // show it if it's not supposed to start hidden
-        // this should have been checked for validity of other specs earlier.
-        if ((appSpec["start-hidden"] !== true)) {
-            appWin.show();
-        }
-        
     }
-    
-    // run deferred loading specifications.
-    appWin.on('loaded',initWindow);
-    
+
+    if (appSpec["menu-bar"] !== false) {
+        setupMenu(appWin);
+    }
+        
         
     if (appSpec["minimize-on-close"]) {
         appWin.minimizeOnClose();
     }
-    
+
+
     // Normal closing behavior
     appWin.on('closed',function() {
         gui.App.closeAllWindows();
     });
+
+
+    // persist window state if necessary.
+    if (appSpec["persist-window-appearance"] === true) {
+        appWin.persistLayout(function() {
+            return JSON.parse(localStorage.windowState || 'null');        
+        },function(data) {
+            localStorage.windowState = JSON.stringify(data);
+        },function() {
+            // persistence is ready, so show the window if we're supposed to.
+            // show it if it's not supposed to start hidden
+            // this should have been checked for validity of other specs earlier.
+            if ((appSpec["start-hidden"] !== true)) {
+                appWin.show();
+            }
+        });
+    }
+
     return appWin;
 }
 
