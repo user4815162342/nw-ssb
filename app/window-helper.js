@@ -124,6 +124,10 @@ module.exports = function(win) {
 
                         // NMS: Removed this because sometimes I don't want to show it yet.
                         // win.show();
+                        // Everything is set up, so now...
+                        if (ready) {
+                            ready();
+                        }
                     }
 
                     var dumpWindowState = function() {
@@ -223,10 +227,6 @@ module.exports = function(win) {
                             }, 500);
                         }, false);
                         
-                        // Everything is set up, so now...
-                        if (ready) {
-                            ready();
-                        }
                     });
                     
 
