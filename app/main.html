@@ -180,6 +180,7 @@ var openApp = function(appSpec) {
     // persist window state if necessary.
     if (appSpec["persist-window-appearance"] === true) {
         appWin.persistLayout(function() {
+            
             return JSON.parse(localStorage.windowState || 'null');        
         },function(data) {
             localStorage.windowState = JSON.stringify(data);

@@ -81,15 +81,10 @@ module.exports = function(win) {
                  * 2014.01.01 (NMS)
                  * - remove the 'close' event, since this conflicts with close-to-tray functionality.
                  *   replace with a 'closing' event listener
-                 * - modified to return an object which can be applied to any window, instead
-                 *   of just the global window.
-                 * - removed the deltaHeight code, as it seems to cause the window
-                 *   to gradually shrink (by much more than the frame heights), and I 
-                 *   don't see the problem it is fixing either (running linux 64 xfce).
-                 *   My issue may be related to the window not being shown until after
-                 *   the state is restored. And, it looks like this issue is supposedly
-                 *   fixed? https://github.com/rogerwang/node-webkit/issues/173
+                 * - modified to move into this windowhelper thingie.
                  * - automatically run the code that only works after loading in a loaded event.
+                 * - take advantage of new 'resize' event.
+                 * - added deltaWidth to match deltaHeight mechanism.
                  */
             
             if (typeof win.__layoutPersisted === "undefined") {
@@ -103,7 +98,9 @@ module.exports = function(win) {
                     var isMaximizationEvent = false;
 
                     // extra height added in linux x64 gnome-shell env, use it as workaround
-                    //var deltaHeight = false;
+                    // Use 'null', not 'false', since that's what null is for.
+                    var deltaHeight = null;
+                    var deltaWidth = null;
 
 
                     var initWindowState = function() {
@@ -118,7 +115,8 @@ module.exports = function(win) {
                             }
                         } else {
                             currWinMode = 'normal';
-                            //deltaHeight = 0
+                            deltaHeight = 0
+                            deltaWidth = 0;
                             dumpWindowState();
                         }
 
@@ -151,18 +149,25 @@ module.exports = function(win) {
                             winState.height = win.height;
 
                             // save delta only of it is not zero
-                            /*if (deltaHeight !== 0) {
+                            if (deltaHeight !== 0) {
                                 winState.deltaHeight = deltaHeight;
-                            }*/
+                            }
+                            if (deltaWidth !== 0) {
+                                winState.deltaWidth = deltaWidth;
+                            }
                         }
                     }
 
                     var restoreWindowState = function() {
                         // deltaHeight already saved, so just restore it and adjust window height
-                        /*if (typeof winState.deltaHeight !== 'undefined') {
-                            deltaHeight = winState.deltaHeight
-                            winState.height = winState.height - deltaHeight
-                        }*/
+                        if (typeof winState.deltaHeight !== 'undefined') {
+                            deltaHeight = winState.deltaHeight;
+                            winState.height = winState.height - deltaHeight;
+                        }
+                        if (typeof winState.deltaWidth !== 'undefined') {
+                            deltaWidth = winState.deltaWidth;
+                            winState.width = winState.width - deltaWidth;
+                        }
 
                         win.resizeTo(winState.width, winState.height);
                         win.moveTo(winState.x, winState.y);
@@ -173,7 +178,10 @@ module.exports = function(win) {
                         store(winState);
                     }
 
-                    initWindowState();
+                    // initWindowState has to wait until loaded because
+                    // it calls dumpWindowState. Also, deltaHeight can't
+                    // be properly calculated until this point as well.
+                    win.once('loaded',initWindowState);
 
                     win.on('maximize', function () {
                         isMaximizationEvent = true;
@@ -193,10 +201,9 @@ module.exports = function(win) {
                         currWinMode = 'normal';
                     });
                     
-                    // This one can't be added until after loaded, since
-                    // it depends on having the inner window object.
-                    win.once('loaded',function() {
-                        win.window.addEventListener('resize', function () {
+                    // make use of the new resize event.
+                    // TODO: I think there's a new 'move' event as well?
+                    win.on('resize',function() {
                             // resize event is fired many times on one resize action,
                             // this hack with setTiemout forces it to fire only once
                             clearTimeout(resizeTimeout);
@@ -213,20 +220,24 @@ module.exports = function(win) {
                                 }
 
                                 // there is no deltaHeight yet, calculate it and adjust window size
-                                /*if (deltaHeight === false) {
-                                    deltaHeight = win.height - winState.height;
+                                if ((deltaHeight === null) || (deltaWidth === null)) {
+                                    if (deltaHeight === null) {
+                                        deltaHeight = win.height - winState.height;
+                                    }
+                                    if (deltaWidth === null) {
+                                        deltaWidth = win.width - winState.width;
+                                    }
 
                                     // set correct size
-                                    if (deltaHeight !== 0) {
-                                        win.resizeTo(winState.width, win.height - deltaHeight);
+                                    if ((deltaHeight !== 0) || (deltaWidth !== 0)) {
+                                        win.resizeTo(win.width - deltaWidth, win.height - deltaHeight);
                                     }
-                                }*/
+                                }
+                                
 
                                 dumpWindowState();
 
-                            }, 500);
-                        }, false);
-                        
+                            }, 500)
                     });
                     
 
