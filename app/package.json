@@ -8,5 +8,8 @@
      "title": "Node-webkit Site Specific Browser",
      "show": false,
      "toolbar": false
-  }
+  },
+  "webkit": {
+		"plugin": true
+	}
 }
