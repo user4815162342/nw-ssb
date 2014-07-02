@@ -52,6 +52,10 @@ var setupTrayIcon = function(win,appSpec,visible) {
     });
     trayMenu.append(trayShowMenu);
     trayMenu.append(new gui.MenuItem({
+        label: "Refresh",
+        click: refreshApp
+    }));
+    trayMenu.append(new gui.MenuItem({
        label: "Exit",
        click: exitApp
     }));
@@ -69,6 +73,10 @@ var showAbout = function() {
 var setupMenu = function(win) {
   appMenu = new gui.Menu({ type: 'menubar' });
   var fileMenu = new gui.Menu();
+  fileMenu.append(new gui.MenuItem({
+      label: "Refresh",
+      click: refreshApp
+  }));
   fileMenu.append(new gui.MenuItem({
     label: "Exit",
     click: exitApp
@@ -96,6 +104,12 @@ var exitApp = function() {
     appWin.show();
     appWin.restore();
     appWin.closeWithoutMinimizing();
+}
+
+var refreshApp = function() {
+    // I can't think of any reason why someone wouldn't want to
+    // reload ignoring cache if they're going to reload.
+    appWin.reloadIgnoringCache();
 }
 
 var loadWinLayout = function() {
